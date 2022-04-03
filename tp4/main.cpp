@@ -3,11 +3,11 @@
 // System includes
 #include <stdio.h>
 #include <stdlib.h>
+#include <string>
 
 // OpenCL includes
-// #include <OpenCL/cl.h>
+//#include <OpenCL/cl.h>
 #include <CL/cl.h>
-
 
 // Project includes
 
@@ -48,9 +48,9 @@ int main(int argc, char ** argv)
 	
 	// Query for the number of recongnized platforms
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
-    // status=clGetPlatformIDs(1, platforms, &numPlatforms);
+    //status=clGetPlatformIDs(1, platforms, &numPlatforms);
 	if(status != CL_SUCCESS) {
-		printf("clGetPlatformIDs failed\n");
+		printf("clGetPlatformIDs failed\nError: %i \n", status);
 		exit(-1);
 	}
 	
