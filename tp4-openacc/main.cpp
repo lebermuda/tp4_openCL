@@ -212,9 +212,9 @@ int main(int argc, char** argv) {
     std::cout << "Matrice :\n" << lA.str() << endl;
 
     std::cout << "---Sequential Start" << endl;
-    auto startSeq = chrono::system_clock::now();
+    auto startSeq = std::chrono::high_resolution_clock::now();
     invertSequential2(lC);
-    auto endSeq = chrono::system_clock::now();
+    auto endSeq = std::chrono::high_resolution_clock::now();
     std::cout << "---Sequential End" << endl;
 
     std::cout << "Matrice inverse:\n" << lC.str() << endl;
@@ -225,10 +225,10 @@ int main(int argc, char** argv) {
 
 
     std::cout << "\n---Parallel Start" << endl;
-    auto startPar = chrono::system_clock::now();
+    auto startPar = std::chrono::high_resolution_clock::now();
     invertParallel(lP);
 
-    auto endPar = chrono::system_clock::now();
+    auto endPar = std::chrono::high_resolution_clock::now();
     std::cout << "---Parallel End" << endl;
     std::cout << "Matrice inverse:\n" << lP.str() << endl;
 
@@ -238,8 +238,7 @@ int main(int argc, char** argv) {
 
     std::cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
 
-    std::cout << "Time Sequential : " << (endSeq - startSeq).count() << " , Time Parallel : " << (endPar - startPar).count() << endl;
-    
+    std::cout << "Time Sequential : " << ((std::chrono::duration<double>)(endSeq - startSeq)).count() << "s" << " , Time Parallel : " << ((std::chrono::duration<double>)(endPar - startPar)).count() << "s" << endl;
 
     return 0;
 }
