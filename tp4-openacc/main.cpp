@@ -125,75 +125,48 @@ void invertParallel(Matrix& iA) {
     size_t cols = lAI.cols();
 
     double* rowPivot = (double*)malloc(cols * sizeof(double));
-    double* data = (double*)malloc(rows * cols * sizeof(double));
+    double* dataPointer = std::begin(lAI.getDataArray());
 
     for (size_t k = 0; k < iA.rows(); k++) {
-
-        std::copy(std::begin(lAI.getDataArray()), std::end(lAI.getDataArray()), data);
-
-        location = -1;
+        location = 0;
         value = 0;
-
         //There is no easy solution in OpenACC for Max+Index https://forums.developer.nvidia.com/t/best-approach-for-reduction-problem/134817/2, https://stackoverflow.com/questions/67912346/is-there-a-faster-argmin-argmax-implementation-in-openacc
-        #pragma acc parallel loop copyin(data[0:rows * cols]) reduction(max:value)
+        #pragma acc parallel loop copyin(dataPointer[0:rows * cols]) reduction(max:value)
         for (size_t i = k; i < rows; i++) {
-            if (fabs(data[i * cols + k]) > value) {
-                value = fabs(data[i * cols + k]);
+            if (fabs(dataPointer[i * cols + k]) > value) {
+                value = fabs(dataPointer[i * cols + k]);
             }
         }
 
         for (size_t i = k; i < rows; i++) {
-            if (fabs(data[i * cols + k]) == value) {
+            if (fabs(dataPointer[i * cols + k]) == value) {
                 location = i;
             }
         }
 
-
-        cout << "Pivot " << k << ": " << value << " l: " << location << "\n" << endl;
+        //cout << "Pivot " << k << ": " << value << " l: " << location << "\n" << endl;
 
         double lValue = lAI(location, k);
-        std::copy(std::begin(lAI.getDataArray()), std::end(lAI.getDataArray()), data);
-
-#pragma acc parallel loop copy(data[0:rows * cols]) copyout(rowPivot[0:cols])
+#pragma acc parallel loop copy(dataPointer[0:rows * cols]) copyout(rowPivot[0:cols])
         for (int j = 0; j < cols; j++) {
-            data[location * cols + j] /= lValue;
-            rowPivot[j] = data[location * cols + j];
-        }
-
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                lAI(i, j) = data[i * cols + j];
-            }
+            dataPointer[location * cols + j] /= lValue;
+            rowPivot[j] = dataPointer[location * cols + j];
         }
 
         lAI.swapRows(k, location);
 
-        std::copy(std::begin(lAI.getDataArray()), std::end(lAI.getDataArray()), data);
-
-#pragma acc parallel loop copy(data[0:rows * cols]) copyin(rowPivot[0:cols])
+#pragma acc parallel loop copy(dataPointer[0:rows * cols]) copyin(rowPivot[0:cols])
         for (int i = 0; i < rows; ++i) {
             if (i != k) {
-                double lValue = data[i * cols + k];
+                double lValue = dataPointer[i * cols + k];
 
                 for (int j = 0; j < cols; j++) {
-                    data[i * cols + j] -= rowPivot[j] * lValue;
+                    dataPointer[i * cols + j] -= rowPivot[j] * lValue;
                 }
             }
         }
 
-        for (int i = 0; i < rows; ++i) {
-            for (int j = 0; j < cols; ++j) {
-                lAI(i, j) = data[i * cols + j];
-            }
-        }
-
-        cout << "Matrice " << k << ": \n" << lAI.str() << endl;
-    }
-
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            lAI(i, j) = data[i * cols + j];
-        }
+        //cout << "Matrice " << k << ": \n" << lAI.str() << endl;
     }
 
     for (int i = 0; i < lAI.rows(); ++i) {
@@ -201,6 +174,8 @@ void invertParallel(Matrix& iA) {
             iA(i, j - iA.cols()) = lAI(i, j);
         }
     }
+
+    free(rowPivot);
 }
 
 // Multiplier deux matrices.
@@ -233,14 +208,6 @@ int main(int argc, char** argv) {
     MatrixRandom lA(lS, lS);
     Matrix lC(lA);
     Matrix lP(lA);
-
-//    std::valarray<double> data = lA.getDataArray();
-//
-//    //double* test = (double*)malloc(lS * lS * sizeof(double));
-//#pragma acc parallel loop
-//    for (int i = 0; i < lS; ++i) {
-//        pointData[i] = pointData[i] + 1;
-//    }
 
     std::cout << "Matrice :\n" << lA.str() << endl;
 
