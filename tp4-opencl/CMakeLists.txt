@@ -3,15 +3,19 @@ cmake_minimum_required (VERSION 3.1)
 # Define project name
 project (tp4-opencl)
 
-file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/VectorAdd.cl
-     DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
 
-IF (WIN32) 
-	set(OpenCL_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/CL)
-	set(OpenCL_LIBRARY ${PROJECT_SOURCE_DIR}/lib/x86_64/opencl.lib)
-ELSE()
-	find_package(OpenCL REQUIRED)
-ENDIF()
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/GaussJordan.cl
+     ${CMAKE_CURRENT_BINARY_DIR}/GaussJordan.cl COPYONLY)
+
+include(FindOpenCL)
+
+#IF (WIN32) 
+#	set(OpenCL_INCLUDE_DIRS ${PROJECT_SOURCE_DIR}/CL)
+#	set(OpenCL_LIBRARY ${PROJECT_SOURCE_DIR}/lib/x86_64/opencl.lib)
+#ELSE()
+#	find_package(OpenCL REQUIRED)
+#ENDIF()
 
 message(${OpenCL_INCLUDE_DIRS})
 include_directories(${OpenCL_INCLUDE_DIRS})
