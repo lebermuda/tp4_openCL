@@ -131,23 +131,24 @@ void invertParallel(Matrix& iA) {
         location = 0;
         value = 0;
         //There is no easy solution in OpenACC for Max+Index https://forums.developer.nvidia.com/t/best-approach-for-reduction-problem/134817/2, https://stackoverflow.com/questions/67912346/is-there-a-faster-argmin-argmax-implementation-in-openacc
-        #pragma acc parallel loop copyin(dataPointer[0:rows * cols]) reduction(max:value)
+        //#pragma acc parallel loop copyin(dataPointer[0:rows * cols]) reduction(max:value)
         for (size_t i = k; i < rows; i++) {
             if (fabs(dataPointer[i * cols + k]) > value) {
                 value = fabs(dataPointer[i * cols + k]);
-            }
-        }
-
-        for (size_t i = k; i < rows; i++) {
-            if (fabs(dataPointer[i * cols + k]) == value) {
                 location = i;
             }
         }
 
+        //for (size_t i = k; i < rows; i++) {
+        //    if (fabs(dataPointer[i * cols + k]) == value) {
+        //        location = i;
+        //    }
+        //}
+
         //cout << "Pivot " << k << ": " << value << " l: " << location << "\n" << endl;
 
         double lValue = lAI(location, k);
-#pragma acc parallel loop copy(dataPointer[0:rows * cols]) copyout(rowPivot[0:cols])
+//#pragma acc parallel loop copy(dataPointer[0:rows * cols]) copyout(rowPivot[0:cols])
         for (int j = 0; j < cols; j++) {
             dataPointer[location * cols + j] /= lValue;
             rowPivot[j] = dataPointer[location * cols + j];
@@ -209,7 +210,7 @@ int main(int argc, char** argv) {
     Matrix lC(lA);
     Matrix lP(lA);
 
-    std::cout << "Matrice :\n" << lA.str() << endl;
+    //std::cout << "Matrice :\n" << lA.str() << endl;
 
     std::cout << "---Sequential Start" << endl;
     auto startSeq = std::chrono::high_resolution_clock::now();
@@ -217,11 +218,11 @@ int main(int argc, char** argv) {
     auto endSeq = std::chrono::high_resolution_clock::now();
     std::cout << "---Sequential End" << endl;
 
-    std::cout << "Matrice inverse:\n" << lC.str() << endl;
+    //std::cout << "Matrice inverse:\n" << lC.str() << endl;
 
-    Matrix lResSeq = multiplyMatrix(lA, lC);
+    //Matrix lResSeq = multiplyMatrix(lA, lC);
 
-    std::cout << "Erreur Sequential : " << lResSeq.getDataArray().sum() - lS << endl;
+    //std::cout << "Erreur Sequential : " << lResSeq.getDataArray().sum() - lS << endl;
 
 
     std::cout << "\n---Parallel Start" << endl;
@@ -230,13 +231,13 @@ int main(int argc, char** argv) {
 
     auto endPar = std::chrono::high_resolution_clock::now();
     std::cout << "---Parallel End" << endl;
-    std::cout << "Matrice inverse:\n" << lP.str() << endl;
+    //std::cout << "Matrice inverse:\n" << lP.str() << endl;
 
 
-    Matrix lRes = multiplyMatrix(lA, lP);
-    std::cout << "Produit des deux matrices:\n" << lRes.str() << endl;
+    //Matrix lRes = multiplyMatrix(lA, lP);
+    //std::cout << "Produit des deux matrices:\n" << lRes.str() << endl;
 
-    std::cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
+    //std::cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
 
     std::cout << "Time Sequential : " << ((std::chrono::duration<double>)(endSeq - startSeq)).count() << "s" << " , Time Parallel : " << ((std::chrono::duration<double>)(endPar - startPar)).count() << "s" << endl;
 
