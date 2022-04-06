@@ -13,13 +13,9 @@
 
 using namespace std;
 
-// Project includes
-
-// Constants, globals
-const int ELEMENTS = 2048;   // elements in each vector
-
 // Signatures
-char* readSource(const char *sourceFilename); 
+char* readSource(const char *sourceFilename);
+void setupOpenCL(cl_platform_id*& platforms, cl_device_id*& devices, cl_context& context, cl_command_queue& cmdQueue, cl_program& program, cl_kernel& kernel);
 
 char* readSource(const char *sourceFilename) {
 	
@@ -193,11 +189,28 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 	cl_mem cols_buffer;
 	cl_int status;
 
-	size_t globalWorkSize[1];
-	globalWorkSize[0] = rows;
+	size_t localWorkSize[] { 1 };
+	size_t globalWorkSize[] { rows + (localWorkSize[0] - rows % localWorkSize[0]) };
+
+	//size_t localWorkSize[] { 2 };
+	//size_t globalWorkSize[] { rows };
 
 	double* rowPivot = (double*)malloc(cols * sizeof(double));
 	double* dataPointer = std::begin(lAI.getDataArray());
+
+	cout << "Size: " << rows + (localWorkSize[0] - rows % localWorkSize[0]) << endl;
+
+	data_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
+		cols * rows * sizeof(double), NULL, &status);
+
+	rowPivot_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY,
+		cols * sizeof(double), NULL, &status);
+
+	k_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY,
+		sizeof(size_t), NULL, &status);
+
+	cols_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+		sizeof(size_t), &cols, &status);
 
 	for (size_t k = 0; k < iA.rows(); k++) {
 		location = 0;
@@ -219,38 +232,48 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 
 		lAI.swapRows(k, location);
 
-		data_buffer = clCreateBuffer(context,  CL_MEM_READ_WRITE | CL_MEM_COPY_HOST_PTR,
-			cols * rows * sizeof(double), dataPointer, &status);
-
-		rowPivot_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-			cols * sizeof(double), rowPivot, &status);
-
-		k_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-			sizeof(size_t), &k, &status);
-
-		cols_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-			sizeof(size_t), &cols, &status);
+		status = clEnqueueWriteBuffer(cmdQueue, data_buffer, CL_TRUE, 0, cols * rows * sizeof(double), dataPointer, 0, NULL, NULL);
+		status = clEnqueueWriteBuffer(cmdQueue, rowPivot_buffer, CL_TRUE, 0, cols * sizeof(double), rowPivot, 0, NULL, NULL);
+		status = clEnqueueWriteBuffer(cmdQueue, k_buffer, CL_TRUE, 0, sizeof(size_t), &k, 0, NULL, NULL);
+		
+		if (status != CL_SUCCESS) {
+			printf("clEnqueueWriteBuffer failed\n");
+			exit(-1);
+		}
 
 		status = clSetKernelArg(kernel, 0, sizeof(cl_mem), &data_buffer);
 		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &rowPivot_buffer);
 		status |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &k_buffer);
 		status |= clSetKernelArg(kernel, 3, sizeof(cl_mem), &cols_buffer);
 
+		if (status != CL_SUCCESS) {
+			printf("clSetKernelArg failed\n");
+			exit(-1);
+		}
+
 		status = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, NULL, globalWorkSize,
-			NULL, 0, NULL, NULL);
+			localWorkSize, 0, NULL, NULL);
+
+		if (status != CL_SUCCESS) {
+			printf("clEnqueueNDRangeKernel failed\n");
+			exit(-1);
+		}
 
 		status = clEnqueueReadBuffer(cmdQueue, data_buffer, CL_TRUE, 0, sizeof(double) * cols * rows, dataPointer,
 			0, NULL, NULL);
 
-		//cout << "Matrice " << k << ": \n" << lAI.str() << endl;
+		if (status != CL_SUCCESS) {
+			printf("clEnqueueReadBuffer failed %i\n", status);
+			exit(-1);
+		}
 
-		clReleaseMemObject(data_buffer);
-		clReleaseMemObject(rowPivot_buffer);
-		clReleaseMemObject(k_buffer);
-		clReleaseMemObject(cols_buffer);
+		//cout << "Matrice " << k << ": \n" << lAI.str() << endl;
 	}
 
-	
+	clReleaseMemObject(data_buffer);
+	clReleaseMemObject(rowPivot_buffer);
+	clReleaseMemObject(k_buffer);
+	clReleaseMemObject(cols_buffer);
 
 	for (int i = 0; i < lAI.rows(); ++i) {
 		for (int j = iA.cols(); j < lAI.cols(); ++j) {
@@ -278,37 +301,14 @@ Matrix multiplyMatrix(const Matrix& iMat1, const Matrix& iMat2) {
 	return lRes;
 }
 
-int main(int argc, char** argv) {
-	printf("Running Vector Addition program\n\n");
-
-	size_t datasize = sizeof(int) * ELEMENTS;
-
-	int* A, * B;   // Input arrays
-	int* C;       // Output array
-
-	// Allocate space for input/output data
-	A = (int*)malloc(datasize);
-	B = (int*)malloc(datasize);
-	C = (int*)malloc(datasize);
-	if (A == NULL || B == NULL || C == NULL) {
-		perror("malloc");
-		exit(-1);
-	}
-
-	// Initialize the input data
-	for (int i = 0; i < ELEMENTS; i++) {
-		A[i] = i;
-		B[i] = i;
-	}
-
+void setupOpenCL(cl_platform_id*& platforms, cl_device_id*& devices, cl_context& context, cl_command_queue& cmdQueue, cl_program& program, cl_kernel& kernel)
+{
 	cl_int status;  // use as return value for most OpenCL functions
 
 	cl_uint numPlatforms = 0;
-	cl_platform_id* platforms;
 
 	// Query for the number of recongnized platforms
 	status = clGetPlatformIDs(0, NULL, &numPlatforms);
-	//status=clGetPlatformIDs(1, platforms, &numPlatforms);
 	if (status != CL_SUCCESS) {
 		printf("clGetPlatformIDs failed\nError: %i \n", status);
 		exit(-1);
@@ -354,7 +354,6 @@ int main(int argc, char** argv) {
 	printf("\n");
 
 	cl_uint numDevices = 0;
-	cl_device_id* devices;
 
 	// Retrive the number of devices present
 	status = clGetDeviceIDs(platforms[0], CL_DEVICE_TYPE_GPU, 0, NULL,
@@ -397,14 +396,17 @@ int main(int argc, char** argv) {
 			sizeof(buf), buf, NULL);
 		printf("\tName: %s\n", buf);
 
-		if (status != CL_SUCCESS) {
-			printf("clGetDeviceInfo failed\n");
-			exit(-1);
-		}
+		//cl_ulong buf_int;
+		//status |= clGetDeviceInfo(devices[i], CL_DEVICE_MAX_CONSTANT_BUFFER_SIZE,
+		//	sizeof(buf_int), &buf_int, NULL);
+		//printf("\tCL_DEVICE_MAX_COMPUTE_UNITS: %i\n", buf_int);
+
+		//if (status != CL_SUCCESS) {
+		//	printf("clGetDeviceInfo failed\n");
+		//	exit(-1);
+		//}
 	}
 	printf("\n");
-
-	cl_context context;
 
 	// Create a context and associate it with the devices
 	context = clCreateContext(NULL, numDevices, devices, NULL, NULL, &status);
@@ -413,7 +415,6 @@ int main(int argc, char** argv) {
 		exit(-1);
 	}
 
-	cl_command_queue cmdQueue;
 
 	// Create a command queue and associate it with the device you 
 	// want to execute on
@@ -423,36 +424,6 @@ int main(int argc, char** argv) {
 		exit(-1);
 	}
 
-	cl_mem d_A, d_B;  // Input buffers on device
-	cl_mem d_C;       // Output buffer on device
-
-	// Create a buffer object (d_A) that contains the data from the host ptr A
-	d_A = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-		datasize, A, &status);
-	if (status != CL_SUCCESS || d_A == NULL) {
-		printf("clCreateBuffer failed\n");
-		exit(-1);
-	}
-
-	// Create a buffer object (d_B) that contains the data from the host ptr B
-	d_B = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-		datasize, B, &status);
-	if (status != CL_SUCCESS || d_B == NULL) {
-		printf("clCreateBuffer failed\n");
-		exit(-1);
-	}
-
-	// Create a buffer object (d_C) with enough space to hold the output data
-	d_C = clCreateBuffer(context, CL_MEM_READ_WRITE,
-		datasize, NULL, &status);
-	if (status != CL_SUCCESS || d_C == NULL) {
-		printf("clCreateBuffer failed\n");
-		exit(-1);
-	}
-
-
-	cl_program program;
-
 	char* source;
 	const char* sourceFile = "GaussJordan.cl";
 	// This function reads in the source code of the program
@@ -461,13 +432,14 @@ int main(int argc, char** argv) {
 	//printf("Program source is:\n%s\n", source);
 
 	// Create a program. The 'source' string is the code from the 
-	// vectoradd.cl file.
 	program = clCreateProgramWithSource(context, 1, (const char**)&source,
 		NULL, &status);
 	if (status != CL_SUCCESS) {
 		printf("clCreateProgramWithSource failed\n");
 		exit(-1);
 	}
+
+	free(source);
 
 	cl_int buildErr;
 	// Build (compile & link) the program for the devices.
@@ -507,61 +479,28 @@ int main(int argc, char** argv) {
 		printf("No build errors\n");
 	}
 
-
-	cl_kernel kernel;
-
 	// Create a kernel from the vector addition function (named "vecadd")
 	kernel = clCreateKernel(program, "inverse_pass", &status);
 	if (status != CL_SUCCESS) {
 		printf("clCreateKernel failed\n");
 		exit(-1);
 	}
+}
 
-	//// Associate the input and output buffers with the kernel 
-	//status = clSetKernelArg(kernel, 0, sizeof(cl_mem), &d_A);
-	//status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &d_B);
-	//status |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &d_C);
-	//if (status != CL_SUCCESS) {
-	//	printf("clSetKernelArg failed\n");
-	//	exit(-1);
-	//}
 
-	//// Define an index space (global work size) of threads for execution.  
-	//// A workgroup size (local work size) is not required, but can be used.
-	//size_t globalWorkSize[1];  // There are ELEMENTS threads
-	//globalWorkSize[0] = ELEMENTS;
+int main(int argc, char** argv) {
+	cl_command_queue cmdQueue;
+	cl_context context;
+	cl_kernel kernel;
+	cl_program program;
+	cl_platform_id* platforms;
+	cl_device_id* devices;
 
-	//// Execute the kernel.
-	//// 'globalWorkSize' is the 1D dimension of the work-items
-	//status = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, NULL, globalWorkSize,
-	//	NULL, 0, NULL, NULL);
-	//if (status != CL_SUCCESS) {
-	//	printf("clEnqueueNDRangeKernel failed\n");
-	//	exit(-1);
-	//}
-
-	//// Read the OpenCL output buffer (d_C) to the host output array (C)
-	//clEnqueueReadBuffer(cmdQueue, d_C, CL_TRUE, 0, datasize, C,
-	//	0, NULL, NULL);
-
-	//// Verify correctness
-	//bool result = true;
-	//for (int i = 0; i < ELEMENTS; i++) {
-	//	if (C[i] != i + i) {
-	//		result = false;
-	//		break;
-	//	}
-	//}
-	//if (result) {
-	//	printf("Output is correct\n");
-	//}
-	//else {
-	//	printf("Output is incorrect\n");
-	//}
+	setupOpenCL(platforms, devices, context, cmdQueue, program, kernel);
 
 	srand((unsigned)time(NULL));
 
-	unsigned int lS = 1000;
+	unsigned int lS = 2080;
 	if (argc >= 2) {
 		lS = atoi(argv[1]);
 	}
@@ -574,7 +513,7 @@ int main(int argc, char** argv) {
 
 	std::cout << "---Sequential Start" << endl;
 	auto startSeq = std::chrono::high_resolution_clock::now();
-	invertSequential2(lC);
+	//invertSequential2(lC);
 	auto endSeq = std::chrono::high_resolution_clock::now();
 	std::cout << "---Sequential End" << endl;
 
@@ -587,6 +526,7 @@ int main(int argc, char** argv) {
 
 	std::cout << "\n---Parallel Start" << endl;
 	auto startPar = std::chrono::high_resolution_clock::now();
+
 	invertParallel(lP, context, kernel, cmdQueue);
 
 	auto endPar = std::chrono::high_resolution_clock::now();
@@ -604,15 +544,14 @@ int main(int argc, char** argv) {
 	clReleaseKernel(kernel);
 	clReleaseProgram(program);
 	clReleaseCommandQueue(cmdQueue);
-	clReleaseMemObject(d_A);
-	clReleaseMemObject(d_B);
-	clReleaseMemObject(d_C);
+	//clReleaseMemObject(d_A);
+	//clReleaseMemObject(d_B);
+	//clReleaseMemObject(d_C);
 	clReleaseContext(context);
 
-	free(A);
-	free(B);
-	free(C);
-	free(source);
+	//free(A);
+	//free(B);
+	//free(C);
 	free(platforms);
 	free(devices);
 
