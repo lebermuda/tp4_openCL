@@ -211,6 +211,8 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 	rows_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 		sizeof(size_t), &rows, &status);
 
+	double push_mem_duration = 0.0f;
+	double gpu_work = 0.0f;
 	for (size_t k = 0; k < iA.rows(); k++) {
 		location = 0;
 		value = 0;
@@ -231,14 +233,11 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 
 		lAI.swapRows(k, location);
 
+		auto start = std::chrono::high_resolution_clock::now();
 		status = clEnqueueWriteBuffer(cmdQueue, data_buffer, CL_TRUE, 0, cols * rows * sizeof(double), dataPointer, 0, NULL, NULL);
 		status = clEnqueueWriteBuffer(cmdQueue, rowPivot_buffer, CL_TRUE, 0, cols * sizeof(double), rowPivot, 0, NULL, NULL);
 		status = clEnqueueWriteBuffer(cmdQueue, k_buffer, CL_TRUE, 0, sizeof(size_t), &k, 0, NULL, NULL);
-		
-		if (status != CL_SUCCESS) {
-			printf("clEnqueueWriteBuffer failed\n");
-			exit(-1);
-		}
+		push_mem_duration += ((std::chrono::duration<double>)(std::chrono::high_resolution_clock::now() - start)).count();
 
 		status = clSetKernelArg(kernel, 0, sizeof(cl_mem), &data_buffer);
 		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &rowPivot_buffer);
@@ -246,27 +245,15 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 		status |= clSetKernelArg(kernel, 3, sizeof(cl_mem), &cols_buffer);
 		status |= clSetKernelArg(kernel, 4, sizeof(cl_mem), &rows_buffer);
 
-		if (status != CL_SUCCESS) {
-			printf("clSetKernelArg failed\n");
-			exit(-1);
-		}
-
 		status = clEnqueueNDRangeKernel(cmdQueue, kernel, 1, NULL, globalWorkSize,
 			localWorkSize, 0, NULL, NULL);
 
-		if (status != CL_SUCCESS) {
-			printf("clEnqueueNDRangeKernel failed\n");
-			exit(-1);
-		}
 
+		start = std::chrono::high_resolution_clock::now();
 		status = clEnqueueReadBuffer(cmdQueue, data_buffer, CL_TRUE, 0, sizeof(double) * cols * rows, dataPointer,
 			0, NULL, NULL);
-
-		if (status != CL_SUCCESS) {
-			printf("clEnqueueReadBuffer failed %i\n", status);
-			exit(-1);
-		}
-
+		gpu_work += ((std::chrono::duration<double>)(std::chrono::high_resolution_clock::now() - start)).count();
+		
 		//cout << "Matrice " << k << ": \n" << lAI.str() << endl;
 	}
 
@@ -280,6 +267,9 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 			iA(i, j - iA.cols()) = lAI(i, j);
 		}
 	}
+
+	cout << "Time pushing to GPU: " << push_mem_duration << endl;
+	cout << "Time waiting on GPU: " << gpu_work << endl;
 
 	free(rowPivot);
 }
@@ -513,7 +503,7 @@ int main(int argc, char** argv) {
 
 	std::cout << "---Sequential Start" << endl;
 	auto startSeq = std::chrono::high_resolution_clock::now();
-	invertSequential2(lC);
+	//invertSequential2(lC);
 	auto endSeq = std::chrono::high_resolution_clock::now();
 	std::cout << "---Sequential End" << endl;
 
