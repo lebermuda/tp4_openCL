@@ -172,7 +172,7 @@ void invertSequential2(Matrix& iA) {
 	free(rowPivot);
 }
 
-void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_command_queue& cmdQueue) {
+void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_command_queue& cmdQueue, size_t grp_size, size_t grp_mult) {
 	assert(iA.rows() == iA.cols());
 
 	MatrixConcatCols lAI(iA, MatrixIdentity(iA.rows()));
@@ -190,8 +190,8 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 	cl_mem rows_buffer;
 	cl_int status;
 
-	size_t localWorkSize[] { 32 };
-	size_t globalWorkSize[] { rows + (localWorkSize[0] - rows % localWorkSize[0]) };
+	size_t localWorkSize[] { grp_size };
+	size_t globalWorkSize[] { rows + (grp_mult - rows % grp_mult) };
 
 	double* rowPivot = (double*)malloc(cols * sizeof(double));
 	double* dataPointer = std::begin(lAI.getDataArray());
@@ -291,7 +291,7 @@ Matrix multiplyMatrix(const Matrix& iMat1, const Matrix& iMat2) {
 	return lRes;
 }
 
-void setupOpenCL(cl_platform_id*& platforms, cl_device_id*& devices, cl_context& context, cl_command_queue& cmdQueue, cl_program& program, cl_kernel& kernel)
+void setupOpenCL(cl_platform_id*& platforms, cl_device_id*& devices, cl_context& context, cl_command_queue& cmdQueue, cl_program& program, cl_kernel& kernel, size_t* grp_size, size_t* grp_mult)
 {
 	cl_int status;  // use as return value for most OpenCL functions
 
@@ -475,6 +475,34 @@ void setupOpenCL(cl_platform_id*& platforms, cl_device_id*& devices, cl_context&
 		printf("clCreateKernel failed\n");
 		exit(-1);
 	}
+
+	status = clGetKernelWorkGroupInfo(kernel,
+		devices[0],
+		CL_KERNEL_WORK_GROUP_SIZE,
+		sizeof(size_t),
+		grp_size,
+		NULL);
+
+	if (status != CL_SUCCESS) {
+		printf("clCreateKernel failed\n");
+		exit(-1);
+	}
+
+	printf("CL_KERNEL_WORK_GROUP_SIZE %i: \n", (int)*grp_size);
+
+	status = clGetKernelWorkGroupInfo(kernel,
+		devices[0],
+		CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE,
+		sizeof(size_t),
+		grp_mult,
+		NULL);
+
+	if (status != CL_SUCCESS) {
+		printf("clCreateKernel failed\n");
+		exit(-1);
+	}
+
+	printf("CL_KERNEL_PREFERRED_WORK_GROUP_SIZE_MULTIPLE %i: \n", (int)*grp_mult);
 }
 
 
@@ -485,12 +513,14 @@ int main(int argc, char** argv) {
 	cl_program program;
 	cl_platform_id* platforms;
 	cl_device_id* devices;
+	size_t work_group_size;
+	size_t grp_mult;
 
-	setupOpenCL(platforms, devices, context, cmdQueue, program, kernel);
+	setupOpenCL(platforms, devices, context, cmdQueue, program, kernel, &work_group_size, &grp_mult);
 
 	srand((unsigned)time(NULL));
 
-	unsigned int lS = 2000;
+	unsigned int lS = 1000;
 	if (argc >= 2) {
 		lS = atoi(argv[1]);
 	}
@@ -503,7 +533,7 @@ int main(int argc, char** argv) {
 
 	std::cout << "---Sequential Start" << endl;
 	auto startSeq = std::chrono::high_resolution_clock::now();
-	//invertSequential2(lC);
+	invertSequential2(lC);
 	auto endSeq = std::chrono::high_resolution_clock::now();
 	std::cout << "---Sequential End" << endl;
 
@@ -517,7 +547,7 @@ int main(int argc, char** argv) {
 	std::cout << "\n---Parallel Start" << endl;
 	auto startPar = std::chrono::high_resolution_clock::now();
 
-	invertParallel(lP, context, kernel, cmdQueue);
+	invertParallel(lP, context, kernel, cmdQueue, work_group_size, grp_mult);
 
 	auto endPar = std::chrono::high_resolution_clock::now();
 	std::cout << "---Parallel End" << endl;
