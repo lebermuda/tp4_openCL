@@ -187,18 +187,14 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 	cl_mem rowPivot_buffer;
 	cl_mem k_buffer;
 	cl_mem cols_buffer;
+	cl_mem rows_buffer;
 	cl_int status;
 
-	size_t localWorkSize[] { 1 };
+	size_t localWorkSize[] { 32 };
 	size_t globalWorkSize[] { rows + (localWorkSize[0] - rows % localWorkSize[0]) };
-
-	//size_t localWorkSize[] { 2 };
-	//size_t globalWorkSize[] { rows };
 
 	double* rowPivot = (double*)malloc(cols * sizeof(double));
 	double* dataPointer = std::begin(lAI.getDataArray());
-
-	cout << "Size: " << rows + (localWorkSize[0] - rows % localWorkSize[0]) << endl;
 
 	data_buffer = clCreateBuffer(context, CL_MEM_READ_WRITE,
 		cols * rows * sizeof(double), NULL, &status);
@@ -211,6 +207,9 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 
 	cols_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
 		sizeof(size_t), &cols, &status);
+
+	rows_buffer = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+		sizeof(size_t), &rows, &status);
 
 	for (size_t k = 0; k < iA.rows(); k++) {
 		location = 0;
@@ -245,6 +244,7 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 		status |= clSetKernelArg(kernel, 1, sizeof(cl_mem), &rowPivot_buffer);
 		status |= clSetKernelArg(kernel, 2, sizeof(cl_mem), &k_buffer);
 		status |= clSetKernelArg(kernel, 3, sizeof(cl_mem), &cols_buffer);
+		status |= clSetKernelArg(kernel, 4, sizeof(cl_mem), &rows_buffer);
 
 		if (status != CL_SUCCESS) {
 			printf("clSetKernelArg failed\n");
@@ -500,7 +500,7 @@ int main(int argc, char** argv) {
 
 	srand((unsigned)time(NULL));
 
-	unsigned int lS = 2080;
+	unsigned int lS = 2000;
 	if (argc >= 2) {
 		lS = atoi(argv[1]);
 	}
@@ -513,7 +513,7 @@ int main(int argc, char** argv) {
 
 	std::cout << "---Sequential Start" << endl;
 	auto startSeq = std::chrono::high_resolution_clock::now();
-	//invertSequential2(lC);
+	invertSequential2(lC);
 	auto endSeq = std::chrono::high_resolution_clock::now();
 	std::cout << "---Sequential End" << endl;
 
@@ -544,14 +544,8 @@ int main(int argc, char** argv) {
 	clReleaseKernel(kernel);
 	clReleaseProgram(program);
 	clReleaseCommandQueue(cmdQueue);
-	//clReleaseMemObject(d_A);
-	//clReleaseMemObject(d_B);
-	//clReleaseMemObject(d_C);
 	clReleaseContext(context);
 
-	//free(A);
-	//free(B);
-	//free(C);
 	free(platforms);
 	free(devices);
 
