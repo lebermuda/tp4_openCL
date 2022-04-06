@@ -8,3 +8,26 @@ exécutez les commandes suivantes:
 
 Assurez-vous au préalable que la commande cmake est installée sur 
 votre machine.
+
+
+RESULTAT
+
+    Pour n=1500
+
+Time Sequential : 29,2916s ; Time Parallel : 16,4641s
+Time Sequential : 28,5153s ; Time Parallel : 20,9631s
+Time Sequential : 31,905s ; Time Parallel : 16,2659s
+Time Sequential : 34,8281s ; Time Parallel : 30,8665s
+Time Sequential : 29,6298s ; Time Parallel : 16,1174s
+
+Pour n variant :
+
+n=1 : Time Parallel : 0,000540264s
+n=10 : Time Parallel : 0,00059546s
+n=100 : Time Parallel : 0,00641368s
+n=500 : Time Parallel : 0,561868s
+n=1000 : Time Parallel : 6,0991s
+n=1500 : Time Parallel : 15,6794s
+n=2000 : Time Parallel : 45,33s
+n=2500 : Time Parallel : 98,5443s
+n=3000 : Time Parallel : 267,572s
