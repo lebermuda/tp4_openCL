@@ -192,6 +192,7 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 	cl_mem k_buffer;
 	cl_mem cols_buffer;
 	cl_int status;
+
 	size_t globalWorkSize[1];
 	globalWorkSize[0] = rows;
 
@@ -242,12 +243,14 @@ void invertParallel(Matrix& iA, cl_context& context, cl_kernel& kernel, cl_comma
 			0, NULL, NULL);
 
 		//cout << "Matrice " << k << ": \n" << lAI.str() << endl;
+
+		clReleaseMemObject(data_buffer);
+		clReleaseMemObject(rowPivot_buffer);
+		clReleaseMemObject(k_buffer);
+		clReleaseMemObject(cols_buffer);
 	}
 
-	clReleaseMemObject(data_buffer);
-	clReleaseMemObject(rowPivot_buffer);
-	clReleaseMemObject(k_buffer);
-	clReleaseMemObject(cols_buffer);
+	
 
 	for (int i = 0; i < lAI.rows(); ++i) {
 		for (int j = iA.cols(); j < lAI.cols(); ++j) {
@@ -558,7 +561,7 @@ int main(int argc, char** argv) {
 
 	srand((unsigned)time(NULL));
 
-	unsigned int lS = 5;
+	unsigned int lS = 1000;
 	if (argc >= 2) {
 		lS = atoi(argv[1]);
 	}
@@ -567,7 +570,7 @@ int main(int argc, char** argv) {
 	Matrix lC(lA);
 	Matrix lP(lA);
 
-	std::cout << "Matrice :\n" << lA.str() << endl;
+	//std::cout << "Matrice :\n" << lA.str() << endl;
 
 	std::cout << "---Sequential Start" << endl;
 	auto startSeq = std::chrono::high_resolution_clock::now();
@@ -575,11 +578,11 @@ int main(int argc, char** argv) {
 	auto endSeq = std::chrono::high_resolution_clock::now();
 	std::cout << "---Sequential End" << endl;
 
-	std::cout << "Matrice inverse:\n" << lC.str() << endl;
+	//std::cout << "Matrice inverse:\n" << lC.str() << endl;
 
-	Matrix lResSeq = multiplyMatrix(lA, lC);
+	//Matrix lResSeq = multiplyMatrix(lA, lC);
 
-	std::cout << "Erreur Sequential : " << lResSeq.getDataArray().sum() - lS << endl;
+	//std::cout << "Erreur Sequential : " << lResSeq.getDataArray().sum() - lS << endl;
 
 
 	std::cout << "\n---Parallel Start" << endl;
@@ -588,13 +591,13 @@ int main(int argc, char** argv) {
 
 	auto endPar = std::chrono::high_resolution_clock::now();
 	std::cout << "---Parallel End" << endl;
-	std::cout << "Matrice inverse:\n" << lP.str() << endl;
+	//std::cout << "Matrice inverse:\n" << lP.str() << endl;
 
 
-	Matrix lRes = multiplyMatrix(lA, lP);
-	std::cout << "Produit des deux matrices:\n" << lRes.str() << endl;
+	//Matrix lRes = multiplyMatrix(lA, lP);
+	//std::cout << "Produit des deux matrices:\n" << lRes.str() << endl;
 
-	std::cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
+	//std::cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
 
 	std::cout << "Time Sequential : " << ((std::chrono::duration<double>)(endSeq - startSeq)).count() << "s" << " , Time Parallel : " << ((std::chrono::duration<double>)(endPar - startPar)).count() << "s" << endl;
 
