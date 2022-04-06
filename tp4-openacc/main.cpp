@@ -155,11 +155,12 @@ void invertParallel(Matrix& iA) {
 
         lAI.swapRows(k, location);
 
-#pragma acc parallel loop copy(dataPointer[0:rows * cols]) copyin(rowPivot[0:cols])
+#pragma acc parallel loop copy(dataPointer[0:rows * cols]) copyin(rowPivot[0:cols]) gang worker
         for (int i = 0; i < rows; ++i) {
             if (i != k) {
                 double lValue = dataPointer[i * cols + k];
 
+#pragma acc loop vector
                 for (int j = 0; j < cols; j++) {
                     dataPointer[i * cols + j] -= rowPivot[j] * lValue;
                 }
@@ -213,7 +214,7 @@ int main(int argc, char** argv) {
 
     std::cout << "---Sequential Start" << endl;
     auto startSeq = std::chrono::high_resolution_clock::now();
-    invertSequential2(lC);
+    //invertSequential2(lC);
     auto endSeq = std::chrono::high_resolution_clock::now();
     std::cout << "---Sequential End" << endl;
 
