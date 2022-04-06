@@ -8,3 +8,27 @@ exécutez les commandes suivantes:
 
 Assurez-vous au préalable que la commande cmake est installée sur 
 votre machine.
+
+
+sudo apt-get install intel-opencl-icd
+
+RESULTAT
+
+    Pour n=1500
+Time Sequential : 37,3999 , Time Parallel : 14,512
+Time Sequential : 35,3485 , Time Parallel : 11,9846
+Time Sequential : 35,1429 , Time Parallel : 11,9402
+Time Sequential : 33,7096 , Time Parallel : 12,3891
+Time Sequential : 31,5781 , Time Parallel : 13,0177
+
+Pour n variant :
+
+n=1 : Time Parallel : 0,000489528
+n=10 : Time Parallel : 0,000833458
+n=100 : Time Parallel : 0,0163678
+n=500 : Time Parallel : 0,50789
+n=1000 : Time Parallel : 3,7927
+n=1500 : Time Parallel : 12,6993
+n=2000 : Time Parallel : 28,2941
+n=2500 : Time Parallel : 55,6609
+n=3000 : Time Parallel : 93,3086
