@@ -214,7 +214,7 @@ int main(int argc, char** argv) {
 
     std::cout << "---Sequential Start" << endl;
     auto startSeq = std::chrono::high_resolution_clock::now();
-    //invertSequential2(lC);
+    invertSequential2(lC);
     auto endSeq = std::chrono::high_resolution_clock::now();
     std::cout << "---Sequential End" << endl;
 
@@ -234,10 +234,10 @@ int main(int argc, char** argv) {
     //std::cout << "Matrice inverse:\n" << lP.str() << endl;
 
 
-    //Matrix lRes = multiplyMatrix(lA, lP);
-    //std::cout << "Produit des deux matrices:\n" << lRes.str() << endl;
+    Matrix lRes = multiplyMatrix(lA, lP);
+    std::cout << "Produit des deux matrices:\n" << lRes.str() << endl;
 
-    //std::cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
+    std::cout << "Erreur Parallel : " << lRes.getDataArray().sum() - lS << endl;
 
     std::cout << "Time Sequential : " << ((std::chrono::duration<double>)(endSeq - startSeq)).count() << "s" << " , Time Parallel : " << ((std::chrono::duration<double>)(endPar - startPar)).count() << "s" << endl;
 
